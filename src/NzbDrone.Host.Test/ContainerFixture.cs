@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using DryIoc;
 using DryIoc.Microsoft.DependencyInjection;
 using FluentAssertions;
@@ -17,6 +18,7 @@ using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Extensions;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.IndexerSearch;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
@@ -74,6 +76,25 @@ namespace NzbDrone.App.Test
             var factory = _container.GetRequiredService<IServiceFactory>();
 
             factory.Build<IIndexerFactory>().Should().NotBeNull();
+        }
+
+        [Test]
+        public void d8_journal_interface_resolves_to_supervised_worker_adapter()
+        {
+            _container.GetRequiredService<ID8SearchOperationJournal>()
+                .Should().BeOfType<D8SearchOperationJournalWorkerClient>();
+        }
+
+        [Test]
+        public void terminal_evidence_worker_di_uses_the_internal_production_process_control()
+        {
+            var workerClient = _container.GetRequiredService<TerminalEvidenceWorkerClient>();
+            var processControl = typeof(TerminalEvidenceWorkerClient)
+                .GetField("_processControl", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(workerClient);
+
+            processControl.GetType().FullName.Should().Be("NzbDrone.Host.TerminalEvidenceWorkerProcessControl");
+            processControl.GetType().IsNotPublic.Should().BeTrue("the injectable test seam must remain internal");
         }
 
         [Test]

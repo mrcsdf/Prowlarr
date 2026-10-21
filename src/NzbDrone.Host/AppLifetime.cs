@@ -19,6 +19,7 @@ namespace NzbDrone.Host
         private readonly IStartupContext _startupContext;
         private readonly IBrowserService _browserService;
         private readonly IEventAggregator _eventAggregator;
+        private readonly TerminalEvidenceListener _terminalEvidenceListener;
         private readonly Logger _logger;
 
         public AppLifetime(IHostApplicationLifetime appLifetime,
@@ -28,6 +29,7 @@ namespace NzbDrone.Host
             IBrowserService browserService,
             IProcessProvider processProvider,
             IEventAggregator eventAggregator,
+            TerminalEvidenceListener terminalEvidenceListener,
             Logger logger)
         {
             _appLifetime = appLifetime;
@@ -36,6 +38,7 @@ namespace NzbDrone.Host
             _startupContext = startupContext;
             _browserService = browserService;
             _eventAggregator = eventAggregator;
+            _terminalEvidenceListener = terminalEvidenceListener;
             _logger = logger;
 
             appLifetime.ApplicationStarted.Register(OnAppStarted);
@@ -44,12 +47,12 @@ namespace NzbDrone.Host
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return _terminalEvidenceListener.StartAsync(cancellationToken);
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            return Task.CompletedTask;
+            return _terminalEvidenceListener.StopAsync(cancellationToken);
         }
 
         private void OnAppStarted()

@@ -78,6 +78,7 @@ namespace NzbDrone.Core.Indexers.Newznab
             }
             catch (Exception ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("newznab_capabilities_parse_exception");
                 ex.WithData(response, 128 * 1024);
                 _logger.Trace("Unexpected Response content ({0} bytes): {1}", response.ResponseData.Length, response.Content);
             }
