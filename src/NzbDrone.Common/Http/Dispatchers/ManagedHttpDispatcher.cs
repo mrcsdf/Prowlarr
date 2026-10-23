@@ -208,6 +208,19 @@ namespace NzbDrone.Common.Http.Dispatchers
                     return response;
                 }
             }
+            catch (OperationCanceledException) when (operationToken.IsCancellationRequested)
+            {
+                if (asyncAttempt != null)
+                {
+                    await asyncAttempt.FailAsync("OperationCanceledException", DateTimeOffset.UtcNow, cts.Token).ConfigureAwait(false);
+                }
+                else
+                {
+                    attempt?.Fail("OperationCanceledException", DateTimeOffset.UtcNow);
+                }
+
+                throw;
+            }
             catch (OperationCanceledException ex) when (cts.IsCancellationRequested)
             {
                 var timeoutException = new WebException("Http request timed out", ex, WebExceptionStatus.Timeout, null);

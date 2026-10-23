@@ -536,6 +536,11 @@ namespace NzbDrone.Core.Indexers
                 _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn(ex, "Unable to connect to indexer [{0}]. This is typically caused by DNS/SSL issues. Check DNS settings, ensure IPv6 is working or disabled, and consider using different DNS servers or a VPN. See: 'https://wiki.servarr.com/prowlarr/troubleshooting#dns-ssl-connection-issues'", url);
             }
+            catch (TaskCanceledException) when (HttpRequestExecutionContext.CancellationToken.IsCancellationRequested)
+            {
+                HttpRequestExecutionContext.MarkIncomplete("observed_request_cancelled");
+                throw;
+            }
             catch (TaskCanceledException ex)
             {
                 HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");

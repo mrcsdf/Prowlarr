@@ -1330,7 +1330,7 @@ namespace NzbDrone.Integration.Test.D8
         [TestCase(false)]
         [TestCase(true)]
         [Platform("Linux")]
-        public async Task initiation_deadline_cancels_dispatch_and_persists_terminal_outcome(bool callerCancellation)
+        public async Task initiation_deadline_or_caller_cancellation_is_persisted_without_timeout_warning(bool callerCancellation)
         {
             var directory = Path.Combine(Path.GetTempPath(), "d8-search-deadline-" + Guid.NewGuid().ToString("N"));
             CreatePrivateDirectory(directory);
@@ -1366,8 +1366,8 @@ namespace NzbDrone.Integration.Test.D8
                 var terminal = repository.Get(row.OperationId);
                 terminal.Should().NotBeNull();
                 terminal.Outcome.Should().Be(expectedOutcome);
-                terminal.Attempts.Should().ContainSingle().Which.ExceptionType.Should().Be("RequestTimeoutException");
-                ExceptionVerification.ExpectedWarns(1);
+                terminal.Attempts.Should().ContainSingle().Which.ExceptionType.Should().Be("OperationCanceledException");
+                ExceptionVerification.ExpectedWarns(0);
             }
             finally
             {
@@ -1607,7 +1607,7 @@ namespace NzbDrone.Integration.Test.D8
 
         [Test]
         [Platform("Linux")]
-        public async Task should_require_mtls_and_redeem_a_signed_operation_capability_once()
+        public async Task producer_mtls_retrieval_succeeds_but_collector_rejects_missing_observer_receipt()
         {
             var directory = Path.Combine(Path.GetTempPath(), "d8-terminal-listener-" + Guid.NewGuid().ToString("N"));
             CreatePrivateDirectory(directory);
@@ -1695,7 +1695,7 @@ namespace NzbDrone.Integration.Test.D8
                     // producer -> collector retrieval path.
                     var interopRecord = storedRecord;
                     var receiptDirectory = Path.Combine(directory, "collector-receipts");
-                    await RunCollectorInteropAsync(new
+                    await AssertCollectorRejectsMissingObserverAsync(new
                     {
                         ca_file = rootPath,
                         client_certificate = clientCertificatePath,
@@ -1711,20 +1711,11 @@ namespace NzbDrone.Integration.Test.D8
                         client_certificate_sha256 = expectedFingerprint,
                         operation_id = interopRecord.OperationId,
                         correlation_id = interopRecord.RequestCorrelationId,
-                        process_instance = interopRecord.ProcessInstanceId,
-                        source_revision = "9437ff9498ea4f5e79f177e42ab6b0ee8620a343",
-                        image_digest = "sha256:" + new string('1', 64),
-                        approved_indexer = interopRecord.IndexerId,
                         responder_pod_uid = ResponderPodUid,
                         receipt_directory = receiptDirectory
                     }).ConfigureAwait(false);
-                    var interopReceipt = Path.Combine(receiptDirectory, interopRecord.OperationId + ".json");
-                    File.Exists(interopReceipt).Should().BeTrue();
-                    var receiptMode = File.GetUnixFileMode(interopReceipt);
-                    Assert.That(
-                        (int)receiptMode & 0x3f,
-                        Is.Zero,
-                        $"receipt mode was {receiptMode} ({Convert.ToString((int)receiptMode, 8)})");
+                    File.Exists(Path.Combine(receiptDirectory, interopRecord.OperationId + ".json"))
+                        .Should().BeFalse("the fixture has no independently trusted observer key or receipt");
 
                     using var handler = CreateClientHandler(root, collector);
                     using var client = new System.Net.Http.HttpClient(handler);
@@ -2127,7 +2118,7 @@ namespace NzbDrone.Integration.Test.D8
             return new X509Certificate2(withKey.Export(X509ContentType.Pfx, PfxPassword), PfxPassword, X509KeyStorageFlags.EphemeralKeySet);
         }
 
-        private static async Task RunCollectorInteropAsync(object configuration)
+        private static async Task AssertCollectorRejectsMissingObserverAsync(object configuration)
         {
             var collectorRoot = Environment.GetEnvironmentVariable("D8F_COLLECTOR_ROOT");
             if (string.IsNullOrWhiteSpace(collectorRoot))
@@ -2173,8 +2164,9 @@ namespace NzbDrone.Integration.Test.D8
 
                 var output = await stdout.ConfigureAwait(false);
                 var error = await stderr.ConfigureAwait(false);
-                process.ExitCode.Should().Be(0, "interop helper reported {0}", error.Trim());
-                output.Should().Contain("PASS receipt=");
+                process.ExitCode.Should().Be(2, "missing independent observer proof must fail closed; helper reported {0}", error.Trim());
+                error.Should().Contain("ProvenanceError: independent process-observer receipt and protected verifier policy are required");
+                output.Should().NotContain("PASS receipt=");
             }
             finally
             {
