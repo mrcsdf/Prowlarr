@@ -6,6 +6,7 @@ using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Exceptions;
 using NzbDrone.Common.Instrumentation;
+using NzbDrone.Core.IndexerSearch;
 using NzbDrone.Host;
 using NzbDrone.Host.AccessControl;
 
@@ -25,6 +26,22 @@ namespace NzbDrone.Console
 
         public static void Main(string[] args)
         {
+            if (args.Length == 1 && args[0] == TerminalEvidenceWorker.EntryPointArgument)
+            {
+                Environment.ExitCode = TerminalEvidenceWorker.RunAsync(
+                    System.Console.OpenStandardInput(),
+                    System.Console.OpenStandardOutput()).GetAwaiter().GetResult();
+                return;
+            }
+
+            if (args.Length == 1 && args[0] == TerminalEvidenceWorker.JournalEntryPointArgument)
+            {
+                Environment.ExitCode = TerminalEvidenceWorker.RunJournalAsync(
+                    System.Console.OpenStandardInput(),
+                    System.Console.OpenStandardOutput()).GetAwaiter().GetResult();
+                return;
+            }
+
             StartupContext startupArgs = null;
 
             try

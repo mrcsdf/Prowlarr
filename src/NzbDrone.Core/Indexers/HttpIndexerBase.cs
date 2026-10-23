@@ -457,6 +457,7 @@ namespace NzbDrone.Core.Indexers
             }
             catch (WebException webException)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 if (webException.Status is WebExceptionStatus.NameResolutionFailure or WebExceptionStatus.ConnectFailure)
                 {
                     _indexerStatusService.RecordConnectionFailure(Definition.Id);
@@ -478,6 +479,7 @@ namespace NzbDrone.Core.Indexers
             }
             catch (TooManyRequestsException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 result.Queries.Add(new IndexerQueryResult { Response = ex.Response });
 
                 var retryTime = ex.RetryAfter != TimeSpan.Zero ? ex.RetryAfter : minimumBackoff;
@@ -487,6 +489,7 @@ namespace NzbDrone.Core.Indexers
             }
             catch (HttpException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 result.Queries.Add(new IndexerQueryResult { Response = ex.Response });
                 _indexerStatusService.RecordFailure(Definition.Id);
 
@@ -501,17 +504,20 @@ namespace NzbDrone.Core.Indexers
             }
             catch (RequestLimitReachedException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 result.Queries.Add(new IndexerQueryResult { Response = ex.Response.HttpResponse });
                 _indexerStatusService.RecordFailure(Definition.Id, minimumBackoff);
                 _logger.Warn(ex, "Request Limit reached for {0}. Disabled for {1}", this, minimumBackoff);
             }
             catch (IndexerAuthException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn(ex, "Invalid Credentials for {0} [{1}]", this, url);
             }
             catch (CloudFlareProtectionException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 result.Queries.Add(new IndexerQueryResult { Response = ex.Response });
                 _indexerStatusService.RecordFailure(Definition.Id);
                 ex.WithData("FeedUrl", url);
@@ -519,22 +525,31 @@ namespace NzbDrone.Core.Indexers
             }
             catch (IndexerException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 result.Queries.Add(new IndexerQueryResult { Response = ex.Response.HttpResponse });
                 _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn(ex, "{0}", url);
             }
             catch (HttpRequestException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn(ex, "Unable to connect to indexer [{0}]. This is typically caused by DNS/SSL issues. Check DNS settings, ensure IPv6 is working or disabled, and consider using different DNS servers or a VPN. See: 'https://wiki.servarr.com/prowlarr/troubleshooting#dns-ssl-connection-issues'", url);
             }
+            catch (TaskCanceledException) when (HttpRequestExecutionContext.CancellationToken.IsCancellationRequested)
+            {
+                HttpRequestExecutionContext.MarkIncomplete("observed_request_cancelled");
+                throw;
+            }
             catch (TaskCanceledException ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn(ex, "Unable to connect to indexer, possibly due to a timeout. [{0}]", url);
             }
             catch (Exception ex)
             {
+                HttpRequestExecutionContext.MarkIncomplete("indexer_search_exception");
                 _indexerStatusService.RecordFailure(Definition.Id);
                 ex.WithData("FeedUrl", url);
                 _logger.Error(ex, "An error occurred while processing indexer feed. [{0}]", url);

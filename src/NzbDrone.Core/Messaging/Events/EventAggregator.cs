@@ -6,6 +6,7 @@ using NLog;
 using NzbDrone.Common;
 using NzbDrone.Common.EnsureThat;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Common.Http;
 using NzbDrone.Common.Messaging;
 using NzbDrone.Common.Reflection;
 using NzbDrone.Common.TPL;
@@ -51,6 +52,17 @@ namespace NzbDrone.Core.Messaging.Events
         }
 
         public void PublishEvent<TEvent>(TEvent @event)
+            where TEvent : class, IEvent
+        {
+            // Observed searches must not pass their operation context to sync or fire-and-forget
+            // subscribers. These callbacks are outside the awaited search operation.
+            using (HttpRequestExecutionContext.IsolateOperationContext())
+            {
+                PublishEventCore(@event);
+            }
+        }
+
+        private void PublishEventCore<TEvent>(TEvent @event)
             where TEvent : class, IEvent
         {
             Ensure.That(@event, () => @event).IsNotNull();

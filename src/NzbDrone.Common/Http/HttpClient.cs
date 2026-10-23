@@ -65,6 +65,19 @@ namespace NzbDrone.Common.Http
 
         public virtual async Task<HttpResponse> ExecuteAsync(HttpRequest request)
         {
+            try
+            {
+                return await ExecuteObservedAsync(request).ConfigureAwait(false);
+            }
+            catch
+            {
+                HttpRequestExecutionContext.MarkIncomplete("http_execution_exception");
+                throw;
+            }
+        }
+
+        private async Task<HttpResponse> ExecuteObservedAsync(HttpRequest request)
+        {
             var cookieContainer = InitializeRequestCookies(request);
 
             var response = await ExecuteRequestAsync(request, cookieContainer);

@@ -17,6 +17,10 @@ namespace NzbDrone.Test.Common
 
         protected static void InitLogging()
         {
+            // Resolve the test logger before registering targets. Its first-use static
+            // initialization resets LogManager.Configuration, which would otherwise
+            // discard ExceptionVerification on the first test in a fresh process.
+            _ = TestLogger;
             new StartupContext();
 
             if (LogManager.Configuration == null || LogManager.Configuration.AllTargets.None(c => c is ExceptionVerification))
