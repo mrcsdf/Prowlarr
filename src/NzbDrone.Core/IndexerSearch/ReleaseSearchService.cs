@@ -35,7 +35,7 @@ namespace NzbDrone.Core.IndexerSearch
         private readonly Logger _logger;
         private readonly IIndexerSearchTerminalRecordRepository _terminalRecords;
         private readonly ID8SearchOperationJournal _operationJournal;
-        private static readonly string ProcessInstanceId = Guid.NewGuid().ToString("D");
+        private static readonly Lazy<string> ProcessInstanceId = new(D8ProcessIdentity.ReadCurrent);
 
         public ReleaseSearchService(IEventAggregator eventAggregator,
                                 IIndexerFactory indexerFactory,
@@ -79,6 +79,7 @@ namespace NzbDrone.Core.IndexerSearch
         {
             deadline.ThrowIfExpired();
             var candidate = GetObservedIndexer(indexerId);
+            var processInstanceId = ProcessInstanceId.Value;
             deadline.ThrowIfExpired();
             var operationId = Guid.NewGuid().ToString("D");
             var correlationToken = CreateCorrelationToken();
@@ -91,7 +92,7 @@ namespace NzbDrone.Core.IndexerSearch
                     idempotencyKey,
                     indexerId,
                     operationId,
-                    ProcessInstanceId,
+                    processInstanceId,
                     correlationToken,
                     startedAt,
                     deadline.WorkRemaining,
@@ -207,6 +208,9 @@ namespace NzbDrone.Core.IndexerSearch
                 throw new InvalidOperationException("Instrumented search is disabled");
             }
 
+            // Resolve the kernel-derived identity before dispatch so a procfs failure cannot
+            // follow an indexer request that would then have no terminal evidence.
+            var processInstanceId = ProcessInstanceId.Value;
             var candidates = new List<IIndexer> { fixedIndexer ?? GetObservedIndexer(indexerId) };
             var operationGuid = operationId == null ? Guid.NewGuid() : Guid.ParseExact(operationId, "D");
             var token = correlationToken ?? CreateCorrelationToken();
@@ -278,7 +282,7 @@ namespace NzbDrone.Core.IndexerSearch
                     OperationId = observation.OperationId.ToString("D"),
                     SchemaVersion = IndexerSearchTerminalContract.SchemaVersion,
                     ApplicationVersion = BuildInfo.Release,
-                    ProcessInstanceId = ProcessInstanceId,
+                    ProcessInstanceId = processInstanceId,
                     RequestCorrelationId = token,
                     IndexerId = indexerId,
                     OperationType = IndexerSearchTerminalContract.OperationType,
